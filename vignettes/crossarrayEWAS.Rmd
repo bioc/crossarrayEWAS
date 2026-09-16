@@ -34,17 +34,25 @@ out an array indicator does not repair that, because the indicator and the
 contrast of interest are partly the same column.
 
 `crossarrayEWAS` takes the other route: the probe-level effect is identified
-**within subject**, so anything constant within a subject's visit series --
-subject identity, and in a cohort where each subject sits on one array
-generation, array type and chip as well -- is absorbed by the transformation
-rather than modelled. What is left is estimated once, grouped by observed
+**within subject**. Anything constant within a subject's visit series is
+absorbed by the transformation rather than modelled: subject identity, and in
+a cohort where each subject sits on one array generation, array type and chip
+as well. What is left is estimated once, grouped by observed
 co-methylation, and turned into regions and long-range blocks by two
 estimators that place boundaries rather than threshold a smooth curve.
 
-[AUTHOR: one paragraph on the cohort this was built for, and the sentence a
-reader needs about why the 450K/EPIC split there is not exchangeable with
-exposure. Keep study specifics out of the package -- the point here is the
-design, not the dataset.]
+The design this was written for is a longitudinal cohort, sampled repeatedly
+within subject over a recruitment window long enough that the array generation
+changed mid-study: earlier subjects assayed on 450K, later subjects on EPIC,
+and no subject spanning the two. The validation cohort is GSE237561, a
+clozapine treatment series of 126 arrays from 38 subjects, 92 on 450K and 34
+on EPIC. What makes that split non-exchangeable with exposure is that one
+variable decides both: subjects recruited later sit on EPIC and also have
+longer treatment duration, so an array indicator and the contrast of interest
+are partly the same column. In GSE237561 neither a subject nor a chip spans
+the two generations, so cohort is nested inside array generation rather than
+crossed with it, and a batch correction taken on cohort is not identifiable
+there.
 
 ```{r load}
 library(crossarrayEWAS)
@@ -56,7 +64,7 @@ No study data ships with the package, so this vignette simulates a cohort with
 the structure the estimators are designed for: subjects followed over an
 unbalanced number of visits, a continuous exposure that varies **within**
 subject, two array generations nested in subject, probes spaced in
-co-methylated clusters, and two planted signals -- a short region and a long
+co-methylated clusters, and two planted signals: a short region and a long
 low-amplitude block.
 
 ```{r simulate-design}
@@ -138,8 +146,9 @@ harmonisation stage that builds this matrix from both array generations is a
 separate step in the pipeline, and `read_f64()` is what loads the matrix it
 writes.
 
-[AUTHOR: if you would rather the vignette read a harmonised matrix from disk
-than simulate one, this is the chunk to replace.]
+The matrix is simulated here so the vignette runs anywhere; on real data it
+is the harmonised matrix written by stage 01 of the pipeline, read back with
+`read_f64()`.
 
 # Probe-level effects, fitted within subject
 
@@ -164,8 +173,19 @@ where <- ifelse(beta_true > 0.1, "region",
 round(tapply(abs(fit$z), where, median), 3)
 ```
 
-[AUTHOR: a sentence on what `var_method = "mom"` is for, and when you would
-choose it over the default `"limma"` shrinkage.]
+`var_method` chooses how the per-probe residual variance is moderated before
+the z statistics are formed. The default `"limma"` calls `limma::squeezeVar()`,
+the reference implementation of that model: maintained, well behaved in the
+degenerate cases, and already a dependency of the harmonisation stage. `"mom"`
+is the method-of-moments fit ported from the Python twin of this core, and it
+exists so the two implementations can be compared arithmetically on identical
+input.
+
+The rule to follow is the one the pipeline follows. The stage drivers default
+to `"limma"` and the published analysis was run with it, so report with the
+default. Choose `"mom"` when you are reproducing the Python path, or deploying
+where the Bioconductor stack is not installed, and name it in the methods if a
+reported result uses it.
 
 # Co-methylation clusters
 
@@ -212,9 +232,14 @@ head(reg[order(-abs(reg$z)),
 ```
 
 `min_effect` is on the M-value scale and is a scientific choice, not a tuning
-knob. [AUTHOR: state the effect size you consider reportable in your own
-setting and why -- a reviewer will ask, and the 0.05 used here is only a
-placeholder that keeps the example from returning nothing.]
+knob. In the clozapine analysis `min_effect` was 0.05 on the M-value scale per 100
+days of treatment: a segment has to move at least that much to be called,
+whatever its z. At mid-range methylation that is about 0.9 percentage points
+of beta per 100 days, so roughly 3 points over a year of treatment and 6 over
+two, falling to about 2 and 4 points at beta 0.2 or 0.8. The floor is set
+there because a slope below it accumulates to less than the change a single
+array can resolve over a realistic follow-up window, so a segment that clears
+it is reportable on the beta scale as well as on the z scale.
 
 `lam0` is cross-validated over held-out **subjects** in the pipeline rather
 than fixed as it is here. `fold_assign()` is the split it uses: deterministic
@@ -290,7 +315,7 @@ Both null constructions resample at the subject level, so a subject's visit
 series is never split across a fold or a permutation.
 `within_subject_permutation()` permutes exposure *inside* each subject, which
 leaves the between-subject distribution intact and destroys only the
-within-subject contrast -- the thing being tested.
+within-subject contrast, which is the thing being tested.
 
 ```{r permutation}
 perm <- within_subject_permutation(exposure, subject)
@@ -308,7 +333,7 @@ keep the vignette quick.
 The callback is handed a set of **subject identifiers**, not column indices,
 and returns the keys it re-discovered. Boundaries move between subsamples, so
 an observed region counts as re-discovered when the intervals overlap rather
-than when the endpoints match -- the same convention the stage-04 driver uses.
+than when the endpoints match, the same convention the stage-04 driver uses.
 
 ```{r stability}
 keys <- sprintf("%s:%d-%d", reg$chr, reg$start, reg$end)
@@ -337,8 +362,14 @@ head(reg[order(-reg$stability, -abs(reg$z)),
          c("chr", "start", "end", "n_probes", "z", "stability")], 5)
 ```
 
-[AUTHOR: the selection-frequency threshold you report on, and whether you use
-it as a filter or as an annotation on the region table.]
+The published run resampled 50 subject subsamples at half the cohort; the
+eight used above only keep the example fast. Selection frequency is carried as
+a column beside z rather than used as a filter, so a region that survives the
+permutation null but is unstable across subsamples stays visible and is read
+as exactly that. The threshold reported on is 0.6, which is conventional in
+the stability-selection literature: regions selected in at least 60% of
+subsamples are described as stable, and the column annotates the region table
+rather than removing rows from it.
 
 # Long-range blocks
 
@@ -401,15 +432,32 @@ if (nrow(bl))
   segments(bl$start / 1e6, 0, bl$end / 1e6, 0, col = "#d95f02", lwd = 4)
 ```
 
-[AUTHOR: the interpretation paragraph -- what a block means relative to a
-region in your analysis, and what you do when the two disagree.]
+A region and a block are not two attempts at the same quantity. Regions are
+called on every harmonised probe at the resolution of a few probes, median 84
+bp over 3 probes in the published run, and locate a focal effect. Blocks are
+called on open-sea probes only, at cluster resolution, and in the same run
+returned 38 blocks of median width 134 kb spanning a median of 9 clusters,
+against 207 regions. A block is therefore evidence of a shallow shift across a
+domain that is largely unmeasured between clusters, and a region is evidence
+of a local one; the two can coexist, and neither subsumes the other.
+
+When they disagree, they are reported as what they are: two independent lines
+of evidence, each on its own scale. A block with no region inside it is not
+demoted, and a region inside a neutral block is not discounted; the region
+table and the block table are read side by side rather than one filtering the
+other.
 
 # Relationship to the pipeline and the Galaxy suite
 
 These functions are the numerical core of a Nextflow pipeline whose earlier
 stages harmonise 450K and EPIC intensities, and of a Galaxy tool suite that
-wraps the same stage drivers. [AUTHOR: one or two sentences plus the links and
-reference you want cited here.]
+wraps the same stage drivers. The pipeline is
+[kkamieniecka/ewas-crossarray-harmonise](https://github.com/kkamieniecka/ewas-crossarray-harmonise),
+which generates this package from its numerical core, and the wrappers are
+published as a Tool Shed-installable suite at
+[bioinfbrad/ewas-crossarray-harmonise](https://github.com/bioinfbrad/ewas-crossarray-harmonise);
+both extend the EWASGalaxy tool suite (Murat *et al.*, *bioRxiv* 2019,
+doi:10.1101/553784).
 
 # Session info
 
