@@ -1,0 +1,40 @@
+Package: crossarrayEWAS
+Type: Package
+Title: Design-Aware Region and Block Detection for Cross-Array Longitudinal EWAS
+Version: 0.99.0
+Authors@R: c(
+    person("Katarzyna", "Kamieniecka", role = c("aut", "cre"),
+           email = "kkamieni@bradford.ac.uk",
+           comment = c(ORCID = "0009-0004-2454-5950")),
+    person("Samantha", "McLean", role = "aut",
+           email = "S.L.Mclean@bradford.ac.uk",
+           comment = c(ORCID = "0000-0001-9328-8928")),
+    person("Krzysztof", "Poterlowicz", role = "aut",
+           email = "K.Poterlowicz1@bradford.ac.uk",
+           comment = c(ORCID = "0000-0001-6173-5674")))
+Description: Estimation and region-calling routines for epigenome-wide
+    association studies that combine Illumina HumanMethylation450 and
+    MethylationEPIC samples and follow subjects over more than one visit.
+    Probe-level effects are fitted within subject, so subject identity, array
+    type and chip are absorbed rather than modelled; adjacent probes are
+    grouped by within-subject co-methylation; regions are obtained by
+    total-variation denoising with a distance-decaying penalty, which places
+    boundaries where the effect track jumps instead of thresholding a smooth
+    curve; and long-range blocks are called from a three-state hidden
+    semi-Markov model whose transition probabilities decay with genomic
+    distance. Selection stability and permutation nulls resample subjects, not
+    samples, so a subject's visit series is never split.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends: R (>= 4.5.0)
+Imports: Matrix, jsonlite, limma, methods, stats
+Suggests: testthat (>= 3.0.0), knitr, rmarkdown, BiocStyle,
+    SummarizedExperiment, GenomicRanges, S4Vectors, IRanges
+VignetteBuilder: knitr
+biocViews: DNAMethylation, DifferentialMethylation, Epigenetics,
+    MethylationArray, Regression, Software
+BiocType: Software
+URL: https://github.com/kkamieniecka/ewas-crossarray-harmonise
+BugReports: https://github.com/kkamieniecka/ewas-crossarray-harmonise/issues
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.1.0
