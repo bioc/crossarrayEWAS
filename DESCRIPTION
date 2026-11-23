@@ -1,7 +1,7 @@
 Package: crossarrayEWAS
 Type: Package
 Title: Design-Aware Region and Block Detection for Cross-Array Longitudinal EWAS
-Version: 1.0.0
+Version: 1.1.0
 Authors@R: c(
     person("Katarzyna", "Kamieniecka", role = c("aut", "cre"),
            email = "kkamieni@bradford.ac.uk",
